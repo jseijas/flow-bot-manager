@@ -1,6 +1,6 @@
 {
   "name": "flow-bot-manager",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Bot manager",
   "main": "lib/index.js",
   "scripts": {

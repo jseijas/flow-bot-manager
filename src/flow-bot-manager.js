@@ -17,6 +17,7 @@ class BotManager {
     this.createRenderFactory();
     this.cardManager = new FlowRequireManager({ logger: settings.logger, pattern: '*.json' });
     this.actionManager = new FlowRequireManager({ logger: settings.logger, pattern: '*.js' });
+    this.dialogManager = new FlowRequireManager({ logger: settings.logger, pattern: '*.json' });
     this.createCards(function(err) {
       if (err) {
         this.log('error', err);
@@ -26,6 +27,12 @@ class BotManager {
         if (err) {
           this.log('error', err);
         }
+        this.createDialogs(function(err) {
+          if (err) {
+            this.log('error', err);
+          }
+          this.buildDialogs();
+        }.bind(this));
       }.bind(this));
     }.bind(this));
   }
@@ -114,6 +121,45 @@ class BotManager {
     }
   }
 
+  createDialogs(cb) {
+    this.log('info', 'Loading dialogs from folder');
+    if (this.settings.dialogPath) {
+      this.log('info', `Loading dialogs from folder ${this.settings.dialogPath}`);
+      this.dialogManager.addFolder(this.settings.dialogPath, cb);
+    } else {
+      this.log('info', 'No dialog folder defined');
+      cb();
+    }
+  }
+
+  buildDialogs() {
+    this.log('info', 'building dialogs');
+    for (let name in this.dialogManager.items) {
+      let item = this.dialogManager.items[name];
+      let actionArr = [];
+      actionArr.push(this.getVariables.bind(this));
+      for (let i = 0; i < item.flow.length; i++) {
+        let current = item.flow[i].trim();
+        if (current !== '') {
+          if (current[0] === '/') {
+            actionArr.push(this.beginDialog.bind(this, current));
+          } else if (current.endsWith('()')) {
+            current = current.substring(0, current.length-2);
+            let action = this.actionManager.getItem(current);
+            actionArr.push(action.method.bind(this));
+          } else {
+            actionArr.push(this.sendCard.bind(this, current));
+          }
+        }
+      }
+      actionArr.push(this.endDialog.bind(this));
+      let finalName = name === 'root' ? '/' : '/'+name;
+      this.bot.dialog(finalName, actionArr);
+      this.log('info', `Built dialog ${finalName}`);
+    }
+    
+  }
+
   addObserver(eventName, fn) {
     if (!this.observers[eventName]) {
       this.observers[eventName] = [];
@@ -138,6 +184,14 @@ class BotManager {
     card = this.renderFactory.render(session, card, locale, session.view);
     session.send(card);
     next();
+  }
+
+  endDialog(session, args, next) {
+    session.endDialog();
+  }
+
+  beginDialog(name, session, args, next) {
+    session.beginDialog(name);
   }
 
 }
