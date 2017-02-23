@@ -1,6 +1,6 @@
 {
   "name": "flow-bot-manager",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Bot manager",
   "main": "lib/index.js",
   "scripts": {
@@ -40,6 +40,6 @@
     "flow-render-factory": "^1.0.2",
     "flow-require-manager": "^1.0.1",
     "flow-storage": "^1.0.5",
-    "flow-template": "^1.0.0"
+    "flow-template": "^1.0.1"
   }
 }
