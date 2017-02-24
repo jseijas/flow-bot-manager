@@ -17,7 +17,7 @@ class BotManager {
     this.createRenderFactory();
     this.cardManager = new FlowRequireManager({ logger: settings.logger, pattern: '*.json' });
     this.actionManager = new FlowRequireManager({ logger: settings.logger, pattern: '*.js' });
-    this.dialogManager = new FlowRequireManager({ logger: settings.logger, pattern: '*.json' });
+    this.dialogManager = new FlowRequireManager({ logger: settings.logger, pattern: '*.flow' });
     this.createCards(function(err) {
       if (err) {
         this.log('error', err);
@@ -132,32 +132,76 @@ class BotManager {
     }
   }
 
+  parseFlow(str) {
+    let lines = str.text.split('\n');
+    let result = [];
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      if (line === '') {
+        continue;
+      }
+      let item = {};
+      let tokens = line.split('->');
+      item.name = tokens[0].trim();
+      item.flow = [];
+      if (tokens.length === 1) {
+        let cardName = tokens[0].substring(1).trim();
+        if (cardName === '') {
+          cardName = 'root';
+        }
+        item.flow.push(cardName);
+      } else {
+        tokens = tokens[1].split(',');
+        for (let j = 0; j < tokens.length; j++) {
+          item.flow.push(tokens[j].trim());
+        }
+      }
+      result.push(item);
+    }
+    return result;
+  }
+
+  buildItemDialog(item) {
+    let actionArr = [];
+    actionArr.push(this.getVariables.bind(this));
+    for (let i = 0; i < item.flow.length; i++) {
+      let current = item.flow[i].trim();
+      if (current !== '') {
+        if (current[0] === '/') {
+          actionArr.push(this.beginDialog.bind(this, current));
+        } else if (current.endsWith('()')) {
+          current = current.substring(0, current.length-2);
+          let action = this.actionManager.getItem(current);
+          actionArr.push(action.method.bind(this));
+        } else {
+          actionArr.push(this.sendCard.bind(this, current));
+        }
+      }
+    }
+    actionArr.push(this.endDialog.bind(this));
+    let finalName = item.name === 'root' ? '/' : item.name;
+    if (!finalName.startsWith('/')) {
+      finalName = '/'+finalName;
+    }
+    this.bot.dialog(finalName, actionArr);
+    this.log('info', `Built dialog ${finalName}`);
+  }
+
   buildDialogs() {
     this.log('info', 'building dialogs');
     for (let name in this.dialogManager.items) {
       let item = this.dialogManager.items[name];
-      let actionArr = [];
-      actionArr.push(this.getVariables.bind(this));
-      for (let i = 0; i < item.flow.length; i++) {
-        let current = item.flow[i].trim();
-        if (current !== '') {
-          if (current[0] === '/') {
-            actionArr.push(this.beginDialog.bind(this, current));
-          } else if (current.endsWith('()')) {
-            current = current.substring(0, current.length-2);
-            let action = this.actionManager.getItem(current);
-            actionArr.push(action.method.bind(this));
-          } else {
-            actionArr.push(this.sendCard.bind(this, current));
-          }
+      if (item.flow) {
+        item.name = name;
+        this.buildItemDialog(item);
+      }
+      else {
+        let items = this.parseFlow(item);
+        for (let i = 0; i < items.length; i++) {
+          this.buildItemDialog(items[i]);
         }
       }
-      actionArr.push(this.endDialog.bind(this));
-      let finalName = name === 'root' ? '/' : '/'+name;
-      this.bot.dialog(finalName, actionArr);
-      this.log('info', `Built dialog ${finalName}`);
-    }
-    
+    }    
   }
 
   addObserver(eventName, fn) {
