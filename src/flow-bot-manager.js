@@ -212,8 +212,9 @@ class BotManager {
   }
 
   getVariables(session, args, next) {
+    session.view = {};
+    session.view.message = session.message;
     this.storage.getAllFromCollection('user', session.message.address.user.id, function(err, values) {
-      session.view = {};
       session.view.user = values;
       next();
     });
