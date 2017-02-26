@@ -2,6 +2,8 @@
 
 The Flow Bot Framework is based on the Microsoft Bot Framework, but including some cool features and a way of defining the bots only describing the cards to the user and the dialog flow.
 
+You can find an example of use at: https://github.com/jseijas/flow-bot-example/
+
 * Persistance: A Persistance layer is added with the flow-storage component. Default storages developed are: memory, json files, loopback model. You can implement your own storages only implementing the FlowStorage abstract class.
 * i18n: A translation module is added. Instead of using "tag constants" you can use directly a default language.
 * Template: A template engine is added with Mustache. The template engine can be used even in the i18n literal. The template engine replace named variables from a view object that is automatically filled.
