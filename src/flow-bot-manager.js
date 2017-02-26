@@ -4,6 +4,7 @@ import builder from 'botbuilder';
 import { FlowRenderFactory } from 'flow-render-factory';
 import path from 'path';
 import FlowRequireManager from 'flow-require-manager';
+import _ from 'lodash';
 
 class BotManager {
   constructor(settings) {
@@ -103,7 +104,22 @@ class BotManager {
     this.log('info', 'Loading cards from folder');
     if (this.settings.cardPath) {
       this.log('info', `Loading card from folder ${this.settings.cardPath}`);
-      this.cardManager.addFolder(this.settings.cardPath, cb);
+      this.cardManager.addFolder(this.settings.cardPath, function(error, items) {
+        if (error) {
+          return cb(error);
+        }
+        for (let name in this.cardManager.items) {
+          let item = this.cardManager.items[name];
+          if (item.type === 'prompt' && item.prompt === 'choice' && _.isString(item.options)) {
+            let tokens = item.options.split('|');
+            item.options = [];
+            for (let j = 0; j < tokens.length; j++) {
+              item.options.push({ tag: tokens[j], text: tokens[j] });
+            }
+          }
+        }
+        return cb(error, items);
+      }.bind(this));
     } else {
       this.log('info', 'No card folder defined');
       cb();
@@ -143,9 +159,13 @@ class BotManager {
       let item = {};
       let tokens = line.split('->');
       item.name = tokens[0].trim();
+      if (item.name.endsWith('*')) {
+        item.repeat = true;
+        item.name = item.name.slice(0, -1);
+      }
       item.flow = [];
       if (tokens.length === 1) {
-        let cardName = tokens[0].substring(1).trim();
+        let cardName = item.name.substring(1);
         if (cardName === '') {
           cardName = 'root';
         }
@@ -175,10 +195,18 @@ class BotManager {
           actionArr.push(action.method.bind(this));
         } else {
           actionArr.push(this.sendCard.bind(this, current));
+          let card = this.cardManager.getItem(current);
+          if (card.type === 'prompt') {
+            actionArr.push(this.reactToPrompt.bind(this));
+          }
         }
       }
     }
-    actionArr.push(this.endDialog.bind(this));
+    if (item.repeat) {
+      actionArr.push(this.replaceDialog.bind(this, item.name));
+    } else {
+      actionArr.push(this.endDialog.bind(this));
+    }
     let finalName = item.name === 'root' ? '/' : item.name;
     if (!finalName.startsWith('/')) {
       finalName = '/'+finalName;
@@ -212,10 +240,10 @@ class BotManager {
   }
 
   getVariables(session, args, next) {
-    session.view = {};
-    session.view.message = session.message;
+    session.dialogData.view = {};
+    session.dialogData.view.message = session.message;
     this.storage.getAllFromCollection('user', session.message.address.user.id, function(err, values) {
-      session.view.user = values;
+      session.dialogData.view.user = values;
       next();
     });
   }
@@ -223,12 +251,15 @@ class BotManager {
   sendCard(name, session, args, next) {
     let card = this.cardManager.getItem(name);
     let locale = 'en';
-    if (session.view && session.view.user && session.view.user.locale) {
-      locale = session.view.user.locale;
+    if (session.dialogData.view && session.dialogData.view.user && session.dialogData.view.user.locale) {
+      locale = session.dialogData.view.user.locale;
     }
-    card = this.renderFactory.render(session, card, locale, session.view);
-    session.send(card);
-    next();
+    let isPrompt = (card.type === 'prompt');
+    card = this.renderFactory.render(session, card, locale, session.dialogData.view);
+    if (!isPrompt) {
+      session.send(card);
+      next();
+    }
   }
 
   endDialog(session, args, next) {
@@ -239,6 +270,79 @@ class BotManager {
     session.beginDialog(name);
   }
 
+  replaceDialog(name, session, args, next) {
+    session.replaceDialog(name);
+  }
+
+  getResponse(prompt, response) {
+    if (prompt.prompt === 'choice') {
+      if (!_.isString(response)) {
+        response = response.entity;
+      }
+      let responselow = response.toLowerCase();
+      for (var i = 0; i < prompt.options.length; i++) {
+        if (responselow === prompt.options[i].text.toLowerCase()) {
+          return { tag: prompt.options[i].tag, text: response };
+        }
+      }
+      return { tag: undefined, text: response };
+    } else {
+      return response;
+    }
+  }
+
+  endReactToPrompt(session, prompt, value, next) {
+    if (prompt.isMenu) {
+      value = value.startsWith('/') ? value : '/'+value;
+      if (value === '/endDialog') {
+        session.endDialog();
+      } else {
+        session.beginDialog(value);
+      }
+    } else {
+      next();
+    }
+  }
+
+  reactToPrompt(session, args, next) {
+    let prompt = session.dialogData.lastCard;
+    let response = this.getResponse(prompt, args.response);
+    session.dialogData.view.response = response;
+    if (prompt.variable) {
+      let variableName = prompt.variable;
+      let tokens = variableName.split('.');
+      let scope;
+      let name;
+      let key;
+      if (tokens.length === 1) {
+        scope = 'default';
+        name = tokens[0];
+      } else {
+        scope = tokens[0];
+        name = tokens[1];
+      }
+      if (scope === 'user') {
+        key = session.message.address.user.id;
+      } else {
+        key = 'default';
+      }
+      let value = response.tag ? response.tag : response;
+      if (scope === 'dialog') {
+        if (!session.dialogData.view.dialog) {
+          session.dialogData.view.dialog = {};
+        }
+        session.dialogData.view.dialog[name] = value;
+        this.endReactToPrompt(session, prompt, value, next);
+      } else {
+        this.storage.setToCollection(scope, key, name, value, function(err, item) {
+          this.endReactToPrompt(session, prompt, value, next);
+        });
+      }
+    } else {
+      let value = response.tag ? response.tag : response;
+      this.endReactToPrompt(session, prompt, value, next);
+    }
+  }
 }
 
 export default BotManager;
