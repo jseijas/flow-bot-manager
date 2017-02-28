@@ -10,6 +10,7 @@ class BotManager {
   constructor(settings) {
     this.settings = settings || {};
     this.observers = {};
+    this.builder = builder;
     this.createStorage();
     this.createTemplate();
     this.createConnector();
@@ -93,7 +94,7 @@ class BotManager {
   }
 
   createRenderFactory() {
-    this.renderFactory = new FlowRenderFactory({ template: this.template, builder: builder });
+    this.renderFactory = new FlowRenderFactory({ template: this.template, builder: builder, parent: this });
   }
 
   getAbsolutePath(relative) {
@@ -246,6 +247,10 @@ class BotManager {
       session.dialogData.view.user = values;
       next();
     });
+  }
+
+  getCard(name) {
+    return this.cardManager.getItem(name);
   }
 
   sendCard(name, session, args, next) {
