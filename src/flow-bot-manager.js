@@ -5,6 +5,7 @@ import { FlowRenderFactory } from 'flow-render-factory';
 import path from 'path';
 import FlowRequireManager from 'flow-require-manager';
 import _ from 'lodash';
+import { FlowMultiConnector } from 'flow-connector';
 
 class BotManager {
   constructor(settings) {
@@ -66,12 +67,18 @@ class BotManager {
     if (this.settings.connector) {
       return this.connector = this.settings.connector;
     }
-    let botAppId = this.settings.botAppId || process.env.BOT_APP_ID;
-    let pass = this.settings.botAppPassword || process.env.BOT_APP_PASSWORD;
-    this.connector = new builder.ChatConnector({
-      appId: botAppId,
-      appPassword: pass
-    });
+    this.connector = new FlowMultiConnector();
+    if (this.settings.defaultConnector) {
+      this.connector.addConnector('default', this.settings.defaultConnector);
+    } else {
+      let botAppId = this.settings.botAppId || process.env.BOT_APP_ID;
+      let pass = this.settings.botAppPassword || process.env.BOT_APP_PASSWORD;
+      let microsoftConnector = new builder.ChatConnector({
+        appId: botAppId,
+        appPassword: pass
+      });
+      this.connector.addConnector('default', microsoftConnector);
+    }
   }
 
   createBot() {
