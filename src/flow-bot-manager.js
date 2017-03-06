@@ -108,6 +108,17 @@ class BotManager {
     return path.normalize(path.join(process.cwd(),relative));
   }
 
+  addCard(item) {
+    this.cardManager.addItem(item);
+    if (item.type === 'prompt' && item.prompt === 'choice' && _.isString(item.options)) {
+      let tokens = item.options.split('|');
+      item.options = [];
+      for (let j = 0; j < tokens.length; j++) {
+        item.options.push({ tag: tokens[j], text: tokens[j] });
+      }
+    }
+  }
+
   createCards(cb) {
     this.log('info', 'Loading cards from folder');
     if (this.settings.cardPath) {
@@ -134,6 +145,14 @@ class BotManager {
     }
   }
 
+  addAction(item) {
+    let action = {
+      name: item.name,
+      text: item.source
+    };
+    this.actionManager.addItem(action);
+  }
+
   createActions(cb) {
     this.log('info', 'Loading actions from folder');
     if (this.settings.actionPath) {
@@ -143,6 +162,10 @@ class BotManager {
       this.log('info', 'No action folder defined');
       cb();
     }
+  }
+
+  addDialog(item) {
+    this.dialogManager.addItem(item);
   }
 
   createDialogs(cb) {
