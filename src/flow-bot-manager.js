@@ -369,6 +369,10 @@ class BotManager {
         session.dialogData.view.dialog[name] = value;
         this.endReactToPrompt(session, prompt, value, next);
       } else {
+        if (!session.dialogData.view.user) {
+          session.dialogData.view.user = {};
+        }
+        session.dialogData.view.user[name] = value;
         this.storage.setToCollection(scope, key, name, value, function(err, item) {
           this.endReactToPrompt(session, prompt, value, next);
         }.bind(this));
