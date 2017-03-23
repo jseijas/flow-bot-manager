@@ -371,7 +371,7 @@ class BotManager {
       } else {
         this.storage.setToCollection(scope, key, name, value, function(err, item) {
           this.endReactToPrompt(session, prompt, value, next);
-        });
+        }.bind(this));
       }
     } else {
       let value = response.tag ? response.tag : response;
